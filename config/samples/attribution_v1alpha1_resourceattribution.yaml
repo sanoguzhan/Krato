@@ -1,0 +1,9 @@
+apiVersion: attribution.krato.io/v1alpha1
+kind: ResourceAttribution
+metadata:
+  labels:
+    app.kubernetes.io/name: kubernetes-resource-attribution-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: resourceattribution-sample
+spec:
+  # TODO(user): Add fields here

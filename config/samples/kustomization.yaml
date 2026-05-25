@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- attribution_v1alpha1_resourceattribution.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
