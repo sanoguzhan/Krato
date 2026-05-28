@@ -38,6 +38,11 @@ type ResourceAttributionSpec struct {
 	// +optional
 	Namespace *string `json:"namespace,omitempty"`
 
+	// Interval at which to update the attribution status (e.g., "30s", "1m")
+	// defaults to "30s" if not specified
+	// +optional
+	UpdateInterval *string `json:"updateInterval,omitempty"`
+
 }
 
 // ResourceAttributionStatus defines the observed state of ResourceAttribution.
@@ -77,6 +82,12 @@ type ResourceAttributionStatus struct {
 	// Last time the status was updated.
 	// +optional
 	LastUpdated *metav1.Time `json:"lastUpdated,omitempty"`
+
+	// MaxConcurrentReconciles indicates the maximum number of concurrent reconciles allowed for this resource.
+	// +optional
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
+	MaxConcurrentReconciles *int32 `json:"maxConcurrentReconciles,omitempty"`
 }
 
 // +kubebuilder:object:root=true
