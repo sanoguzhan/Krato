@@ -61,6 +61,9 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var metricServerBackend string
+	var metricServerEndpoint string
+	var maxConcurrentReconciles int
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -79,6 +82,10 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1,
+		"The maximum number of concurrent reconciles for each controller. Default is 1.")
+	flag.StringVar(&metricServerBackend, "metric-server-backend", "", "The backend used for metrics collection (e.g., 'Prometheus', 'Custom').")
+	flag.StringVar(&metricServerEndpoint, "metric-server-endpoint", "", "The endpoint of the metrics server used for collecting resource usage data.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -181,7 +188,7 @@ func main() {
 	if err := (&controller.ResourceAttributionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, maxConcurrentReconciles); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "resourceattribution")
 		os.Exit(1)
 	}

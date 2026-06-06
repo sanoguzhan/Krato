@@ -88,6 +88,14 @@ type ResourceAttributionStatus struct {
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1
 	MaxConcurrentReconciles *int32 `json:"maxConcurrentReconciles,omitempty"`
+
+	// MetricsServerBackend indicates the backend used for metrics collection (e.g., "Prometheus", "Custom").
+	// +optional
+	MetricsServerBackend *string `json:"metricsServerBackend,omitempty"`
+
+	// MetricsServerEndpoint indicates the endpoint of the metrics server used for collecting resource usage data.
+	// +optional
+	MetricsServerEndpoint *string `json:"metricsServerEndpoint,omitempty"`
 }
 
 // +kubebuilder:object:root=true
