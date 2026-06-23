@@ -1,0 +1,127 @@
+name: Publish Image
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    name: Compute Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.semantic.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute semantic version
+        uses: paulhatch/semantic-version@v5.4.0
+        id: semantic
+        with:
+          tag_prefix: "v"
+          major_pattern: "/!:|BREAKING CHANGE:/"
+
+  build-draft:
+    name: Build And Push Draft
+    runs-on: ubuntu-latest
+    needs: version
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute image name
+        id: image
+        shell: bash
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "name=ghcr.io/${repo}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push draft
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.image.outputs.name }}:draft-${{ github.sha }}
+
+  check:
+    name: Validate Draft Image
+    runs-on: ubuntu-latest
+    needs: build-draft
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test draft image
+        run: |
+          docker run --rm \
+            "${{ needs.build-draft.outputs.image }}@${{ needs.build-draft.outputs.digest }}" \
+            echo "Image sanity check passed"
+
+  promote:
+    name: Promote To Release Tags
+    runs-on: ubuntu-latest
+    needs: [version, build-draft, check]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote draft to release tags
+        env:
+          IMAGE: ${{ needs.build-draft.outputs.image }}
+          DIGEST: ${{ needs.build-draft.outputs.digest }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          SOURCE="${IMAGE}@${DIGEST}"
+          crane copy "${SOURCE}" "${IMAGE}:v${VERSION}"
+          crane copy "${SOURCE}" "${IMAGE}:latest"
