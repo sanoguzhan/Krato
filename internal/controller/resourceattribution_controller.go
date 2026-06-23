@@ -18,7 +18,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/sanoguzhan/krato/internal/metrics"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,9 +29,20 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	attributionv1alpha1 "github.com/sanoguzhan/krato/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type metricsBackend string
+
+const (
+	metricsBackendRequests   metricsBackend = "request"
+	metricsBackendPrometheus metricsBackend = "prometheus"
+	metricsBackendCustom     metricsBackend = "custom"
+)
+
+type metricsSourceConfig struct {
+	Backend  metricsBackend
+	Endpoint string
+}
 
 // ResourceAttributionReconciler reconciles a ResourceAttribution object
 type ResourceAttributionReconciler struct {
@@ -49,10 +63,7 @@ type ResourceAttributionReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
 func (r *ResourceAttributionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var isDefaultMetricsServer bool = false
-	var metricsServerBackend, metricsServerEndpoint *string
-	var totalCPUUsage, totalMemoryUsage int64
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx)
 
 	var resourceAttribution attributionv1alpha1.ResourceAttribution
 	if err := r.Get(ctx, req.NamespacedName, &resourceAttribution); err != nil {
@@ -61,40 +72,55 @@ func (r *ResourceAttributionReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	selector, err := metav1.LabelSelectorAsSelector(&resourceAttribution.Spec.Selector)
+	if resourceAttribution.Spec.Selector == nil {
+		return ctrl.Result{}, nil
+	}
+
+	config := resolveMetricsSource(resourceAttribution.Status)
+	collector, err := selectMetricsCollector(config, r.Client)
 	if err != nil {
-		logf.FromContext(ctx).Error(err, "Failed to convert label selector to selector")
+		log.Error(err, "Failed to select metrics collector", "backend", config.Backend, "endpoint", config.Endpoint)
 		return ctrl.Result{}, err
 	}
 
-	podList := &corev1.PodList{}
-	listOpts := []client.ListOption{
-		client.InNamespace(resourceAttribution.Namespace),
-		client.MatchingLabelsSelector{Selector: selector},
-	}
-
-	if err := r.List(ctx, podList, listOpts...); err != nil {
-		logf.FromContext(ctx).Error(err, "Failed to list pods")
+	metricsResult, err := collector.CollectMetrics(ctx, resourceAttribution.Namespace, resourceAttribution.Spec.Selector)
+	if err != nil {
+		log.Error(err, "Failed to collect metrics", "backend", config.Backend, "endpoint", config.Endpoint)
 		return ctrl.Result{}, err
-	}	
+	}
 
-	
-	if resourceAttribution.Status.MetricsServerBackend != "" && resourceAttribution.Status.MetricsServerEndpoint != "" {
-			logf.FromContext(ctx).Info("ResourceAttribution has metrics server configured", "backend", resourceAttribution.Status.MetricsServerBackend, "endpoint", resourceAttribution.Status.MetricsServerEndpoint)
-			metricsServerBackend = &resourceAttribution.Status.MetricsServerBackend
-			metricsServerEndpoint = &resourceAttribution.Status.MetricsServerEndpoint
-	} else {
-		isDefaultMetricsServer = true
-			logf.FromContext(ctx).Info("ResourceAttribution does not have metrics server configured")
-	}
-	for _, pod := range podList.Items {
-		if isDefaultMetricsServer {
-	        totalCPUUsage += pod.Spec.Containers[0].Resources.Requests.Cpu().MilliValue()
-	        totalMemoryUsage += pod.Spec.Containers[0].Resources.Requests.Memory().Value()
-		}			
-	}
+	log.Info("Collected workload metrics", "backend", config.Backend, "cpuMilli", metricsResult.CPUmilli, "memoryBytes", metricsResult.MemoryBytes, "podCount", metricsResult.PodCount)
 
 	return ctrl.Result{}, nil
+}
+
+func resolveMetricsSource(status attributionv1alpha1.ResourceAttributionStatus) metricsSourceConfig {
+	backend := strings.ToLower(strings.TrimSpace(ptrValue(status.MetricsServerBackend)))
+	endpoint := strings.TrimSpace(ptrValue(status.MetricsServerEndpoint))
+
+	if backend == "" || endpoint == "" {
+		return metricsSourceConfig{Backend: metricsBackendRequests}
+	}
+
+	return metricsSourceConfig{Backend: metricsBackend(backend), Endpoint: endpoint}
+}
+
+func selectMetricsCollector(config metricsSourceConfig, kubeClient client.Client) (metrics.MetricsCollector, error) {
+	switch config.Backend {
+	case metricsBackendRequests:
+		return metrics.NewRequestCollector(kubeClient), nil
+	case metricsBackendPrometheus, metricsBackendCustom:
+		return nil, fmt.Errorf("metrics backend %q is not implemented yet", config.Backend)
+	default:
+		return nil, fmt.Errorf("unsupported metrics backend %q", config.Backend)
+	}
+}
+
+func ptrValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
 
 // SetupWithManager sets up the controller with the Manager.

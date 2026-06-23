@@ -186,6 +186,14 @@ spec:
               memoryUsage:
                 description: Resource usage metrics observed for the selected pods.
                 type: string
+              metricsServerBackend:
+                description: MetricsServerBackend indicates the backend used for metrics
+                  collection (e.g., "Prometheus", "Custom").
+                type: string
+              metricsServerEndpoint:
+                description: MetricsServerEndpoint indicates the endpoint of the metrics
+                  server used for collecting resource usage data.
+                type: string
               podCount:
                 description: Number of pods matching the selector.
                 format: int32
