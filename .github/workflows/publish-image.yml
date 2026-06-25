@@ -94,9 +94,10 @@ jobs:
 
       - name: Smoke test draft image
         run: |
-          docker run --rm \
-            "${{ needs.build-draft.outputs.image }}@${{ needs.build-draft.outputs.digest }}" \
-            echo "Image sanity check passed"
+          image_ref="${{ needs.build-draft.outputs.image }}@${{ needs.build-draft.outputs.digest }}"
+          docker pull "${image_ref}"
+          docker inspect "${image_ref}" > /dev/null
+          echo "Image sanity check passed"
 
   promote:
     name: Promote To Release Tags
