@@ -21,11 +21,11 @@ func NewRequestCollector(k8sClient client.Client) *RequestCollector {
 			},
 		},
 	}
-	r.usageFn = r.GetPodUsage
+	r.usageFn = r.getPodUsage
 	return r
 }
 
-func (r *RequestCollector) GetPodUsage(ctx context.Context, pod corev1.Pod) (MetricResult, error) {
+func (r *RequestCollector) getPodUsage(ctx context.Context, pod corev1.Pod) (MetricResult, error) {
 	_ = ctx
 
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {

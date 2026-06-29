@@ -14,9 +14,6 @@ type listPodsFn func(ctx context.Context, namespace string, selector *metav1.Lab
 type MetricsCollector interface {
 	// CollectMetrics collects resource usage metrics for the given namespace and label selector.
 	CollectMetrics(ctx context.Context, namespace string, selector *metav1.LabelSelector) (MetricResult, error)
-
-	// GetPodUsage retrieves the resource usage metrics for a specific pod.
-	GetPodUsage(ctx context.Context, pod corev1.Pod) (MetricResult, error)
 }
 
 type MetricResult struct {
