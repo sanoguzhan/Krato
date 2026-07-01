@@ -80,7 +80,7 @@ func (r *ResourceAttributionReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	config := resolveMetricsSource(resourceAttribution.Status)
+	config := resolveMetricsSource(resourceAttribution.Spec, resourceAttribution.Status)
 	collector, err := selectMetricsCollector(config, r.Client, r.Config)
 	if err != nil {
 		log.Error(err, "Failed to select metrics collector", "backend", config.Backend, "endpoint", config.Endpoint)
@@ -98,11 +98,18 @@ func (r *ResourceAttributionReconciler) Reconcile(ctx context.Context, req ctrl.
 	return ctrl.Result{}, nil
 }
 
-func resolveMetricsSource(status attributionv1alpha1.ResourceAttributionStatus) metricsSourceConfig {
-	backend := strings.ToLower(strings.TrimSpace(ptrValue(status.MetricsServerBackend)))
-	endpoint := strings.TrimSpace(ptrValue(status.MetricsServerEndpoint))
+func resolveMetricsSource(spec attributionv1alpha1.ResourceAttributionSpec, status attributionv1alpha1.ResourceAttributionStatus) metricsSourceConfig {
+	backend := strings.ToLower(strings.TrimSpace(ptrValue(spec.MetricsBackend)))
+	endpoint := strings.TrimSpace(ptrValue(spec.MetricsEndpoint))
 
-	if backend == "" || endpoint == "" {
+	if backend == "" {
+		backend = strings.ToLower(strings.TrimSpace(ptrValue(status.MetricsServerBackend)))
+	}
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(ptrValue(status.MetricsServerEndpoint))
+	}
+
+	if backend == "" {
 		return metricsSourceConfig{Backend: metricsBackendRequests}
 	}
 

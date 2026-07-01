@@ -43,6 +43,16 @@ type ResourceAttributionSpec struct {
 	// +optional
 	UpdateInterval *string `json:"updateInterval,omitempty"`
 
+	// MetricsBackend selects the source used to collect pod resource usage.
+	// Allowed values: "request" (default), "metrics-server", "prometheus", "custom".
+	// +optional
+	// +kubebuilder:validation:Enum=request;metrics-server;prometheus;custom
+	MetricsBackend *string `json:"metricsBackend,omitempty"`
+
+	// MetricsEndpoint is the endpoint used by remote backends (e.g., Prometheus, custom).
+	// Ignored for "request" and "metrics-server" backends.
+	// +optional
+	MetricsEndpoint *string `json:"metricsEndpoint,omitempty"`
 }
 
 // ResourceAttributionStatus defines the observed state of ResourceAttribution.
