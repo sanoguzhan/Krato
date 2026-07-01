@@ -188,6 +188,7 @@ func main() {
 	if err := (&controller.ResourceAttributionReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Config: mgr.GetConfig(),
 	}).SetupWithManager(mgr, maxConcurrentReconciles); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "resourceattribution")
 		os.Exit(1)

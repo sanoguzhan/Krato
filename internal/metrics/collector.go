@@ -51,7 +51,6 @@ func (c *CollectorType) CollectMetrics(ctx context.Context, namespace string, se
 
 	aggregated, err := aggregatePodMetrics(ctx, pods, c.usageFn)
 	if err != nil {
-		logf.FromContext(ctx).Error(err, "Failed to aggregate pod request metrics")
 		return MetricResult{}, fmt.Errorf("failed to aggregate pod metrics: %w", err)
 	}
 

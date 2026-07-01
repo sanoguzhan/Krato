@@ -23,6 +23,7 @@ import (
 
 	"github.com/sanoguzhan/krato/internal/metrics"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -34,9 +35,10 @@ import (
 type metricsBackend string
 
 const (
-	metricsBackendRequests   metricsBackend = "request"
-	metricsBackendPrometheus metricsBackend = "prometheus"
-	metricsBackendCustom     metricsBackend = "custom"
+	metricsBackendRequests     metricsBackend = "request"
+	metricsBackendPrometheus   metricsBackend = "prometheus"
+	metricsBackendMetricServer metricsBackend = "metrics-server"
+	metricsBackendCustom       metricsBackend = "custom"
 )
 
 type metricsSourceConfig struct {
@@ -48,6 +50,7 @@ type metricsSourceConfig struct {
 type ResourceAttributionReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Config *rest.Config
 }
 
 // +kubebuilder:rbac:groups=attribution.krato.io,resources=resourceattributions,verbs=get;list;watch;create;update;patch;delete
@@ -78,7 +81,7 @@ func (r *ResourceAttributionReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	config := resolveMetricsSource(resourceAttribution.Status)
-	collector, err := selectMetricsCollector(config, r.Client)
+	collector, err := selectMetricsCollector(config, r.Client, r.Config)
 	if err != nil {
 		log.Error(err, "Failed to select metrics collector", "backend", config.Backend, "endpoint", config.Endpoint)
 		return ctrl.Result{}, err
@@ -106,10 +109,12 @@ func resolveMetricsSource(status attributionv1alpha1.ResourceAttributionStatus) 
 	return metricsSourceConfig{Backend: metricsBackend(backend), Endpoint: endpoint}
 }
 
-func selectMetricsCollector(config metricsSourceConfig, kubeClient client.Client) (metrics.MetricsCollector, error) {
+func selectMetricsCollector(config metricsSourceConfig, kubeClient client.Client, cfg *rest.Config) (metrics.MetricsCollector, error) {
 	switch config.Backend {
 	case metricsBackendRequests:
 		return metrics.NewRequestCollector(kubeClient), nil
+	case metricsBackendMetricServer:
+		return metrics.NewMetricServerCollector(kubeClient, cfg)
 	case metricsBackendPrometheus, metricsBackendCustom:
 		return nil, fmt.Errorf("metrics backend %q is not implemented yet", config.Backend)
 	default:
