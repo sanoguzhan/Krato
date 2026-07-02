@@ -57,6 +57,7 @@ type ResourceAttributionReconciler struct {
 // +kubebuilder:rbac:groups=attribution.krato.io,resources=resourceattributions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=attribution.krato.io,resources=resourceattributions/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
