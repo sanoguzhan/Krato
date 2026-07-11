@@ -123,7 +123,12 @@ func selectMetricsCollector(config metricsSourceConfig, kubeClient client.Client
 		return metrics.NewRequestCollector(kubeClient), nil
 	case metricsBackendMetricServer:
 		return metrics.NewMetricServerCollector(kubeClient, cfg)
-	case metricsBackendPrometheus, metricsBackendCustom:
+	case metricsBackendPrometheus:
+		if config.Endpoint == "" {
+			return nil, fmt.Errorf("metrics backend %q requires spec.metricsEndpoint", config.Backend)
+		}
+		return metrics.NewPrometheusCollector(kubeClient, config.Endpoint)
+	case metricsBackendCustom:
 		return nil, fmt.Errorf("metrics backend %q is not implemented yet", config.Backend)
 	default:
 		return nil, fmt.Errorf("unsupported metrics backend %q", config.Backend)
