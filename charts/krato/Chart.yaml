@@ -1,14 +1,20 @@
 apiVersion: v2
-name: krato
-description: A Helm chart for Kubernetes
-
+name: kubernetes-resource-attribution-operator
+description: A Helm chart to distribute kubernetes-resource-attribution-operator
 type: application
 
 version: 0.1.0
+appVersion: "0.1.0"
 
-appVersion: "1.16.0"
+keywords:
+  - kubernetes
+  - operator
+
+annotations:
+  kubebuilder.io/generated-by: kubebuilder
+
 dependencies:
   - name: kube-prometheus-stack
-    version: "87.*"
+    version: "87.17.0"
     repository: https://prometheus-community.github.io/helm-charts
     condition: kube-prometheus-stack.enabled
