@@ -34,3 +34,4 @@ bin/
 
 # Agents files 
 .github/agents/*
+charts/krato/charts/
