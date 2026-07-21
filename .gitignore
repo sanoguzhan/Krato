@@ -24,7 +24,7 @@ profile.cov
 go.work
 go.work.sum
 bin/
-
+dist/
 # env file
 .env
 
