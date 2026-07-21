@@ -16,7 +16,7 @@ manager:
   replicas: 1
 
   image:
-    repository: controller
+    repository: ghcr.io/sanoguzhan/krato
     ## Image tag (defaults to Chart.appVersion if not set)
     ##
     # tag: ""
