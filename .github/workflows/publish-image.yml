@@ -75,6 +75,8 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
+          cache-from: type=registry,ref=ghcr.io/sanoguzhan/krato:buildcache
+          cache-to: type=registry,ref=ghcr.io/sanoguzhan/krato:buildcache,mode=max
           tags: ${{ steps.image.outputs.name }}:draft-${{ github.sha }}
 
   check:
