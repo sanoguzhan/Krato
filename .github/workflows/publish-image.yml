@@ -9,7 +9,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: publish-image-${{ github.ref }}
+  group: publish-image-release
   cancel-in-progress: true
 
 jobs:
@@ -110,6 +110,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
           persist-credentials: true
 
       - name: Install crane
@@ -144,10 +146,16 @@ jobs:
 
       - name: Commit Helm chart version
         env:
+          TARGET_BRANCH: ${{ github.ref_name }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add charts/krato/Chart.yaml
+          if git diff --cached --quiet; then
+            echo "Chart.yaml already contains version v${VERSION}"
+            exit 0
+          fi
           git commit -m "chore(chart): release v${VERSION} [skip ci]"
-          git push origin HEAD:master
+          git pull --rebase origin "${TARGET_BRANCH}"
+          git push origin "HEAD:${TARGET_BRANCH}"
