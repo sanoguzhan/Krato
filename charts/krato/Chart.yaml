@@ -2,17 +2,13 @@ apiVersion: v2
 name: kubernetes-resource-attribution-operator
 description: A Helm chart to distribute kubernetes-resource-attribution-operator
 type: application
-
-version: 0.1.0
-appVersion: "0.1.0"
-
+version: 0.0.1
+appVersion: "v0.0.1"
 keywords:
   - kubernetes
   - operator
-
 annotations:
   kubebuilder.io/generated-by: kubebuilder
-
 dependencies:
   - name: kube-prometheus-stack
     version: "87.17.0"
