@@ -104,9 +104,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: [version, build-draft, check]
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
       - name: Install crane
         uses: imjasonh/setup-crane@v0.4
 
@@ -126,3 +131,23 @@ jobs:
           SOURCE="${IMAGE}@${DIGEST}"
           crane copy "${SOURCE}" "${IMAGE}:v${VERSION}"
           crane copy "${SOURCE}" "${IMAGE}:latest"
+
+      - name: Update Helm chart version
+        uses: mikefarah/yq@v4.47.2
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        with:
+          cmd: >-
+            yq -i
+            '.version = strenv(VERSION) | .appVersion = "v" + strenv(VERSION)'
+            charts/krato/Chart.yaml
+
+      - name: Commit Helm chart version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/krato/Chart.yaml
+          git commit -m "chore(chart): release v${VERSION} [skip ci]"
+          git push origin HEAD:master
