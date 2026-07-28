@@ -25,7 +25,7 @@ profile.cov
 go.work
 go.work.sum
 bin/
-dist/
+
 # env file
 .env
 
@@ -35,4 +35,7 @@ dist/
 
 # Agents files 
 .github/agents/*
+
+# Helm charts
 charts/krato/charts/
+

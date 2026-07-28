@@ -57,6 +57,7 @@ type ResourceAttributionReconciler struct {
 // +kubebuilder:rbac:groups=attribution.krato.io,resources=resourceattributions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=attribution.krato.io,resources=resourceattributions/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -122,7 +123,12 @@ func selectMetricsCollector(config metricsSourceConfig, kubeClient client.Client
 		return metrics.NewRequestCollector(kubeClient), nil
 	case metricsBackendMetricServer:
 		return metrics.NewMetricServerCollector(kubeClient, cfg)
-	case metricsBackendPrometheus, metricsBackendCustom:
+	case metricsBackendPrometheus:
+		if config.Endpoint == "" {
+			return nil, fmt.Errorf("metrics backend %q requires spec.metricsEndpoint", config.Backend)
+		}
+		return metrics.NewPrometheusCollector(kubeClient, config.Endpoint)
+	case metricsBackendCustom:
 		return nil, fmt.Errorf("metrics backend %q is not implemented yet", config.Backend)
 	default:
 		return nil, fmt.Errorf("unsupported metrics backend %q", config.Backend)
