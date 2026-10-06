@@ -51,7 +51,9 @@ var _ = Describe("ResourceAttribution Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: attributionv1alpha1.ResourceAttributionSpec{
+						Selector: &metav1.LabelSelector{},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
