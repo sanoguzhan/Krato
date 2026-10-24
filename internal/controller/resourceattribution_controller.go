@@ -19,9 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/sanoguzhan/krato/internal/metrics"
+	"github.com/sanoguzhan/krato/internal/source"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,19 +33,9 @@ import (
 	attributionv1alpha1 "github.com/sanoguzhan/krato/api/v1alpha1"
 )
 
-type metricsBackend string
-
-const (
-	metricsBackendRequests     metricsBackend = "request"
-	metricsBackendPrometheus   metricsBackend = "prometheus"
-	metricsBackendMetricServer metricsBackend = "metrics-server"
-	metricsBackendCustom       metricsBackend = "custom"
-)
-
-type metricsSourceConfig struct {
-	Backend  metricsBackend
-	Endpoint string
-}
+// conditionReady reports whether the spec is valid. Usage itself is collected
+// by the collector loop and exported as Prometheus metrics, not written here.
+const conditionReady = "Ready"
 
 // ResourceAttributionReconciler reconciles a ResourceAttribution object
 type ResourceAttributionReconciler struct {
@@ -77,69 +68,43 @@ func (r *ResourceAttributionReconciler) Reconcile(ctx context.Context, req ctrl.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if resourceAttribution.Spec.Selector == nil {
+	condition := metav1.Condition{
+		Type:               conditionReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             "Configured",
+		Message:            "Spec is valid; usage is collected by the collector loop",
+		ObservedGeneration: resourceAttribution.Generation,
+	}
+	if err := r.validate(&resourceAttribution); err != nil {
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "InvalidSpec"
+		condition.Message = err.Error()
+	}
+
+	if !meta.SetStatusCondition(&resourceAttribution.Status.Conditions, condition) {
 		return ctrl.Result{}, nil
 	}
-
-	config := resolveMetricsSource(resourceAttribution.Spec, resourceAttribution.Status)
-	collector, err := selectMetricsCollector(config, r.Client, r.Config)
-	if err != nil {
-		log.Error(err, "Failed to select metrics collector", "backend", config.Backend, "endpoint", config.Endpoint)
+	if err := r.Status().Update(ctx, &resourceAttribution); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	metricsResult, err := collector.CollectMetrics(ctx, resourceAttribution.Namespace, resourceAttribution.Spec.Selector)
-	if err != nil {
-		log.Error(err, "Failed to collect metrics", "backend", config.Backend, "endpoint", config.Endpoint)
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Collected workload metrics", "backend", config.Backend, "cpuMilli", metricsResult.CPUmilli, "memoryBytes", metricsResult.MemoryBytes, "podCount", metricsResult.PodCount)
-
+	log.Info("Updated ResourceAttribution status", "condition", condition.Type, "status", condition.Status, "reason", condition.Reason)
 	return ctrl.Result{}, nil
 }
 
-func resolveMetricsSource(spec attributionv1alpha1.ResourceAttributionSpec, status attributionv1alpha1.ResourceAttributionStatus) metricsSourceConfig {
-	backend := strings.ToLower(strings.TrimSpace(ptrValue(spec.MetricsBackend)))
-	endpoint := strings.TrimSpace(ptrValue(spec.MetricsEndpoint))
-
-	if backend == "" {
-		backend = strings.ToLower(strings.TrimSpace(ptrValue(status.MetricsServerBackend)))
+// validate checks what the collector loop needs: a usable selector and a
+// metrics backend that can be built.
+func (r *ResourceAttributionReconciler) validate(ra *attributionv1alpha1.ResourceAttribution) error {
+	if ra.Spec.Selector == nil {
+		return fmt.Errorf("spec.selector must be set")
 	}
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(ptrValue(status.MetricsServerEndpoint))
+	if _, err := metav1.LabelSelectorAsSelector(ra.Spec.Selector); err != nil {
+		return fmt.Errorf("invalid spec.selector: %w", err)
 	}
-
-	if backend == "" {
-		return metricsSourceConfig{Backend: metricsBackendRequests}
+	if _, err := source.New(source.ConfigFor(ra), r.Config); err != nil {
+		return err
 	}
-
-	return metricsSourceConfig{Backend: metricsBackend(backend), Endpoint: endpoint}
-}
-
-func selectMetricsCollector(config metricsSourceConfig, kubeClient client.Client, cfg *rest.Config) (metrics.MetricsCollector, error) {
-	switch config.Backend {
-	case metricsBackendRequests:
-		return metrics.NewRequestCollector(kubeClient), nil
-	case metricsBackendMetricServer:
-		return metrics.NewMetricServerCollector(kubeClient, cfg)
-	case metricsBackendPrometheus:
-		if config.Endpoint == "" {
-			return nil, fmt.Errorf("metrics backend %q requires spec.metricsEndpoint", config.Backend)
-		}
-		return metrics.NewPrometheusCollector(kubeClient, config.Endpoint)
-	case metricsBackendCustom:
-		return nil, fmt.Errorf("metrics backend %q is not implemented yet", config.Backend)
-	default:
-		return nil, fmt.Errorf("unsupported metrics backend %q", config.Backend)
-	}
-}
-
-func ptrValue(v *string) string {
-	if v == nil {
-		return ""
-	}
-	return *v
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -104,11 +104,6 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic
-              updateInterval:
-                description: |-
-                  Interval at which to update the attribution status (e.g., "30s", "1m")
-                  defaults to "30s" if not specified
-                type: string
             required:
             - selector
             type: object

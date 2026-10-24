@@ -170,3 +170,9 @@ certManager:
 prometheus:
   enable: false
 
+## Bundled kube-prometheus-stack subchart (Prometheus, Grafana, Alertmanager, ...).
+## Off by default; enable it only if the cluster has no Prometheus of its own.
+##
+kube-prometheus-stack:
+  enabled: false
+

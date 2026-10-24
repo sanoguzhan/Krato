@@ -97,11 +97,6 @@ func (in *ResourceAttributionSpec) DeepCopyInto(out *ResourceAttributionSpec) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.UpdateInterval != nil {
-		in, out := &in.UpdateInterval, &out.UpdateInterval
-		*out = new(string)
-		**out = **in
-	}
 	if in.MetricsBackend != nil {
 		in, out := &in.MetricsBackend, &out.MetricsBackend
 		*out = new(string)
