@@ -38,11 +38,6 @@ type ResourceAttributionSpec struct {
 	// +optional
 	Namespace *string `json:"namespace,omitempty"`
 
-	// Interval at which to update the attribution status (e.g., "30s", "1m")
-	// defaults to "30s" if not specified
-	// +optional
-	UpdateInterval *string `json:"updateInterval,omitempty"`
-
 	// MetricsBackend selects the source used to collect pod resource usage.
 	// Allowed values: "request" (default), "metrics-server", "prometheus", "custom".
 	// +optional

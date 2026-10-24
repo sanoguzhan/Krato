@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -36,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	attributionv1alpha1 "github.com/sanoguzhan/krato/api/v1alpha1"
+	"github.com/sanoguzhan/krato/internal/collector"
 	"github.com/sanoguzhan/krato/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
@@ -64,6 +66,7 @@ func main() {
 	var metricServerBackend string
 	var metricServerEndpoint string
 	var maxConcurrentReconciles int
+	var collectInterval time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -84,6 +87,8 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1,
 		"The maximum number of concurrent reconciles for each controller. Default is 1.")
+	flag.DurationVar(&collectInterval, "collect-interval", 30*time.Second,
+		"How often usage is collected for all ResourceAttributions. Match it to the Prometheus scrape interval.")
 	flag.StringVar(&metricServerBackend, "metric-server-backend", "", "The backend used for metrics collection (e.g., 'Prometheus', 'Custom').")
 	flag.StringVar(&metricServerEndpoint, "metric-server-endpoint", "", "The endpoint of the metrics server used for collecting resource usage data.")
 	opts := zap.Options{
@@ -194,6 +199,15 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+
+	if err := mgr.Add(&collector.Loop{
+		Client:     mgr.GetClient(),
+		RestConfig: mgr.GetConfig(),
+		Interval:   collectInterval,
+	}); err != nil {
+		setupLog.Error(err, "Failed to add usage collector")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "Failed to set up health check")

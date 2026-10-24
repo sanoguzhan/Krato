@@ -11,6 +11,9 @@ metadata:
 spec:
   endpoints:
     - path: /metrics
+      # Keep the operator's own "namespace" label on krato_attribution_* series
+      # instead of renaming it to exported_namespace.
+      honorLabels: true
       port: https # Ensure this is the name of the port that exposes HTTPS metrics
       scheme: https
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
