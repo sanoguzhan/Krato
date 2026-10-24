@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -79,8 +80,36 @@ var _ = Describe("ResourceAttribution Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Checking the Ready condition")
+			resource := &attributionv1alpha1.ResourceAttribution{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+			Expect(meta.IsStatusConditionTrue(resource.Status.Conditions, conditionReady)).To(BeTrue())
+		})
+
+		It("should mark the resource not ready when the metrics backend is invalid", func() {
+			By("Setting the prometheus backend without an endpoint")
+			resource := &attributionv1alpha1.ResourceAttribution{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+			backend := "prometheus"
+			resource.Spec.MetricsBackend = &backend
+			Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
+			controllerReconciler := &ResourceAttributionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the Ready condition")
+			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+			condition := meta.FindStatusCondition(resource.Status.Conditions, conditionReady)
+			Expect(condition).NotTo(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal("InvalidSpec"))
 		})
 	})
 })
