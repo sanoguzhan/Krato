@@ -27,29 +27,39 @@ Krato answers these by introducing a `ResourceAttribution` Custom Resource that 
 User applies ResourceAttribution CR
            │
            ▼
-Controller reconciles (triggered + periodic)
+Controller reconciles (on change)
            │
-           ├── List pods matching spec.selector
+           └── Validate spec, set Ready condition
+
+Collector loop (every --collect-interval, leader only)
            │
-           ├── Group pods by workload owner (Deployment / StatefulSet / Job)
+           ├── List all ResourceAttributions, group them by metrics backend
            │
-           ├── Collect metrics (requests fallback / metrics-server / prometheus)
+           ├── List pods matching each spec.selector
+           │
+           ├── Query each backend once for all those pods (requests / metrics-server / prometheus)
+           │
+           ├── Group pods by workload owner (Deployment / StatefulSet / Job — future)
            │
            ├── Apply pricing (noop / AWS EC2 — future)
            │
-           └── Write grouped results to status
+           └── Export totals as krato_attribution_* gauges on /metrics
+
+Prometheus scrapes /metrics and stores the history
 ```
 
 ### Internal Packages
 
 ```
 internal/
-├── controller/         # Thin reconcile loop — orchestrates everything
-├── metrics/            # Pluggable metrics collection backends
-│   ├── collector.go    # MetricsCollector interface
+├── controller/         # Validates ResourceAttributions, sets the Ready condition
+├── collector/          # Loop that collects usage for all attributions every --collect-interval
+├── source/             # Pluggable usage backends, queried in bulk
+│   ├── source.go       # Source interface and backend selection
 │   ├── requests.go     # Fallback: pod spec resource requests
-│   ├── metricsserver.go# Kubernetes metrics-server backend
-│   └── prometheus.go   # Prometheus backend (future)
+│   ├── metricserver.go # Kubernetes metrics-server backend
+│   └── prometheus.go   # Prometheus backend
+├── metrics/            # Exported krato_attribution_* Prometheus gauges
 ├── attribution/        # Engine: groups pods by workload, applies pricing
 │   └── engine.go
 └── pricing/            # Pluggable pricing backends
@@ -76,31 +86,20 @@ spec:
     matchLabels:
       team: payments
   namespace: payments          # optional — omit for all namespaces
-  updateInterval: "30s"        # optional — defaults to 30s
 ```
 
-After reconciliation, the status is populated:
+After reconciliation, the status reports whether the spec is valid:
 
 ```yaml
 status:
-  podCount: 7
-  totalCpu: "2300m"
-  totalMemory: "1536Mi"
-  workloads:
-    - name: payments-api
-      kind: Deployment
-      namespace: payments
-      podCount: 4
-      cpuMilli: 1600
-      memBytes: 1073741824
-    - name: payments-worker
-      kind: StatefulSet
-      namespace: payments
-      podCount: 3
-      cpuMilli: 700
-      memBytes: 536870912
-  lastUpdated: "2026-06-06T10:00:00Z"
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Configured
+      message: "Spec is valid; usage is collected by the collector loop"
 ```
+
+Usage is not written to the status. It is exported as Prometheus metrics (see [Exported Metrics](#exported-metrics)).
 
 ---
 
@@ -110,7 +109,20 @@ status:
 |---|---|---|---|---|
 | `selector` | `LabelSelector` | yes | — | Matches pods to attribute |
 | `namespace` | `string` | no | all | Scope to a specific namespace |
-| `updateInterval` | `string` | no | `"30s"` | How often to refresh metrics |
+
+---
+
+## Exported Metrics
+
+Served on the manager's `/metrics` endpoint, labelled by `namespace` and `attribution`:
+
+| Metric | Description |
+|---|---|
+| `krato_attribution_cpu_cores` | CPU of the selected pods, in cores |
+| `krato_attribution_memory_bytes` | Memory of the selected pods, in bytes |
+| `krato_attribution_pods` | Running or pending pods selected |
+
+With the `request` backend the values are requested resources; with `metrics-server` and `prometheus` they are actual usage. A series disappears when its ResourceAttribution is deleted or its collection fails.
 
 ---
 
@@ -122,6 +134,7 @@ status:
 | `--health-probe-bind-address` | `:8081` | Liveness/readiness probe endpoint |
 | `--leader-elect` | `false` | Enable leader election for HA |
 | `--max-concurrent-reconciles` | `1` | Concurrent reconcilers per controller |
+| `--collect-interval` | `30s` | How often usage is collected for all ResourceAttributions; match it to the Prometheus scrape interval |
 | `--metrics-backend` | `none` | Metrics source: `none`, `metrics-server`, `prometheus` |
 | `--metrics-backend-address` | `""` | Endpoint for prometheus or custom backend |
 
