@@ -172,7 +172,20 @@ prometheus:
 
 ## Bundled kube-prometheus-stack subchart (Prometheus, Grafana, Alertmanager, ...).
 ## Off by default; enable it only if the cluster has no Prometheus of its own.
+## To have it scrape Krato, also set metrics.enable and prometheus.enable to true.
 ##
 kube-prometheus-stack:
   enabled: false
+  prometheus:
+    prometheusSpec:
+      # How long metric history is kept.
+      retention: 30d
+      # Store history on a PersistentVolume so it survives Prometheus restarts.
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
 
